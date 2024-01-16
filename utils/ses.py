@@ -1,11 +1,13 @@
 import boto3
 import logging
 from botocore import exceptions
+from botocore.exceptions import ClientError
 import sys
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 import os
+
 
 
 class SES:
@@ -73,11 +75,14 @@ class SES:
         
         return final_msg
 
-    def ses_sendmail(self, sub, dir_path, tl_saving, resource_info, platform, current_date, url, bucket_name, region):   
+    # def ses_sendmail(self, sub, dir_path, tl_saving, resource_info, platform, current_date, url, bucket_name, ses_region):   
+
+    def ses_sendmail(self, sub, dir_path, tl_saving, resource_info, platform, current_date, url, bucket_name, ses_region):   
         """Sends email."""
         
         try:
-            ses = boto3.client('ses', region_name=region)
+            ses = boto3.client('ses', region_name=ses_region)
+            print('SES Client:', ses)
             message = MIMEMultipart()
             message['Subject'] = sub
             message['From'] = self.from_address
@@ -87,7 +92,7 @@ class SES:
             part = MIMEText(html, 'html')
             message.attach(part)
         
-            files = [f'{dir_path}/pennypincher_summary_report.csv', f'{dir_path}/pennypincher_inventory.csv']
+            files = [f'{dir_path}/pennypincher_findings.html', f'{dir_path}/pennypincher_inventory.csv']
             
             for file in files:
                 with open(file, 'rb') as f:
@@ -104,21 +109,17 @@ class SES:
             )
         
             print("Sending the Cost Optimization report to "+ self.to_address)        
-        except ses.meta.client.exceptions.MessageRejected as ex:
-            if ex.response['Error']['Message'] == 'MessageRejected':
-                self.logger.warning('email not verified')
-                print(ex.response['Error']['Message'])
-            
-        except exceptions.ClientError as error:
-            if error.response['Error']['Code'] == 'LimitExceededException':
+
+        except ClientError as error:
+            if error.response['Error']['Code'] == 'MessageRejected':
+                self.logger.warning('Email not verified or message rejected')
+            elif error.response['Error']['Code'] == 'LimitExceededException':
                 self.logger.warning('API call limit exceeded; backing off and retrying...')
             else:
-                self.logger.error(error.response['Error']['Code'] + ': ' + error.response['Error']['Message'] +
-                                  ' | Line {} in ses.py'.format(sys.exc_info()[-1].tb_lineno))
+                self.logger.error(f'{error.response["Error"]["Code"]}: {error.response["Error"]["Message"]} | Line {sys.exc_info()[-1].tb_lineno} in ses.py')
                 sys.exit(1)
 
         except Exception as e:
-            self.logger.error("Error on line {} in ses.py".format(sys.exc_info()[-1].tb_lineno) + " | Message: " + str(e))
+            self.logger.error(f"Error on line {sys.exc_info()[-1].tb_lineno} in ses.py | Message: {str(e)}")
             sys.exit(1)
-        
         

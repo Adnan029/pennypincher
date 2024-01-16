@@ -32,11 +32,11 @@ def lambda_handler(event=None, context=None):
     env_config = final_config['config']['env']
     env_config = check_env(env_config)
     channel_name =  env_config['channel_name']   #Slack Channel Name
-    from_address = env_config['from_address']               #SES verified email address from which email is to be sent
+    from_address = env_config['from_address']            #SES verified email address from which email is to be sent
     to_address = env_config['to_address']         #Email addresses of recipents (Comma Separated)
-    ses_region = env_config['ses_region']                   #Region where SES is configured
-    reporting_platform = env_config['reporting_platform']    #Email/Slack/Email and Slack
-    account_name = env_config['account_name'] 
+    ses_region = env_config['ses_region']                  #Region where SES is configured
+    reporting_platform = env_config['reporting_platform']   #Email/Slack/Email and Slack
+    account_name = env_config['account_name']
     webhook_url = env_config['webhook_url']
     report_bucket = env_config['report_bucket']
     #Verifying Identities
@@ -110,10 +110,14 @@ def lambda_handler(event=None, context=None):
                                                     Params={'Bucket': report_bucket,
                                                             'Key': current_datetime+"/pennypincher_findings.html"},
                                                     ExpiresIn=604800)
+            
         if 'email' in  reporting_platform.lower().split(','):
+            client = boto3.client('ses',region_name=ses_region) 
             ses_obj.ses_sendmail(
                 sub='Cost Optimization Report | ' + account_name + ' | Total Savings: $'+ str(round(total_savings, 2)), dir_path=dir_path,
-                tl_saving = str(round(total_savings, 2)), resource_info = resource_info, platform= reporting_platform, current_date = date_obj_format, url=pre_url, bucket_name = report_bucket, region=ses_region)
+                tl_saving = str(round(total_savings, 2)), resource_info = resource_info, platform= reporting_platform, current_date = date_obj_format, url=pre_url, bucket_name = report_bucket, ses_region= ses_region)
+    
+
         if 'slack' in  reporting_platform.lower().split(','):
             print("Sending report to slack .....")
             slack_obj.slack_alert(resource_info, str(round(total_savings, 2)),report_bucket, date_obj_format, reporting_platform, pre_url)      
